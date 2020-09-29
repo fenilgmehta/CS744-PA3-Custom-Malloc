@@ -134,7 +134,6 @@ void *mm_malloc(size_t size) {
 	}
 	
 	void *result = NULL;
-	struct MemoryMetaData *resultPtr;
 	if (iterBestFit == NULL) {
 		// all free blocks are smaller than the
 		// required size, so we use mem_sbrk
@@ -158,24 +157,18 @@ void *mm_malloc(size_t size) {
 			result = (void *) iterBestFit;
 
 			// adjust free list pointers for prev and next node of iterBestFit
-			if(iterBestFit->prev == NULL) {
-				// iterBestFit is the first node in the free list
-				freeList.next = iterBestFit->next;
-			} else {
-				// no need to perform NULL test for 'iterBestFit->prev'
-				// because it has been verified above
-				iterBestFit->prev->next = iterBestFit->next;
-
-				// handle case if iterBestFit is the last node in the free list
-				if(iterBestFit->next != NULL)
-					iterBestFit->next->prev = iterBestFit->prev;
-			}
+			iterBestFit->prev->next = iterBestFit->next;
+            if(iterBestFit->next != NULL)  // handle case if iterBestFit is the last node in the free list
+                iterBestFit->next->prev = iterBestFit->prev;
 		} else {
+		    // give space from the end of the block
+		    // TODO: test the performance if space is given from the start of the free block
 			iterBestFit->sizeInBytes -= sizeRequired;
 			result = ((void *) iterBestFit) + iterBestFit->sizeInBytes;
 		}
 	}
-	resultPtr = (struct MemoryMetaData *) result;
+
+    struct MemoryMetaData *resultPtr = (struct MemoryMetaData *) result;
 	resultPtr->prev = NULL;
 	resultPtr->next = NULL;
 	resultPtr->isFree = 0;
@@ -260,7 +253,12 @@ void mm_free(void *ptr)
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
-void *mm_realloc(void *ptr, size_t size) {		
+
+inline u_int32_t min(u_int32_t num1, u_int32_t num2) {
+    return (num1 < num2) ? num1 : num2;
+}
+
+void *mm_realloc(void *ptr, size_t size) {
 	// memory was NOT previously allocated - just mm_malloc(...)
 	if(ptr == NULL) {
 		// mm_malloc internally handle the case where size == 0
@@ -288,7 +286,8 @@ void *mm_realloc(void *ptr, size_t size) {
 	 * blocks should also be updated.
 	*/
 
-	// memcpy(newPtr, ptr, ((struct MemoryMetaData *) (ptr - sizeofMemoryMetaData))->sizeInBytes - sizeofMemoryMetaData);
+	u_int32_t oldAllocationSize = ((struct MemoryMetaData *) (ptr - sizeofMemoryMetaData))->sizeInBytes - sizeofMemoryMetaData;
+	memcpy(newPtr, ptr, min(oldAllocationSize, size));
 
 	mm_free(ptr);
 	return newPtr;
@@ -298,7 +297,19 @@ void *mm_realloc(void *ptr, size_t size) {
 
 
 
+/*
 
+make
+OIFS="${IFS}"
+IFS=" "
+for i in $(echo "short1-bal.rep short2-bal.rep short3-bal.rep binary-bal.rep cp-decl-bal.rep random-bal.rep realloc-bal.rep");
+do
+echo "----------------- Working on ${i} -----------------"
+./mdriver1 -V -f "traces/${i}"
+done
+IFS="${OIFS}"
+
+ */
 
 
 
