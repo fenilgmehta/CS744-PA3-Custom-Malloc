@@ -5,7 +5,7 @@ TEAM = TIGERS
 VERSION = 1
 
 CC = gcc
-CFLAGS = -Wall -O2 -m32
+CFLAGS = -Wall -O2 # -m32  # TODO: check moodle for further instructions and fix this
 
 OBJS = mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
 OBJS1 = mdriver.o mm1.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
