@@ -194,39 +194,52 @@ void mm_free(void *ptr)
 	
 	struct MemoryMetaData *ptrMetaData = (struct MemoryMetaData *) (ptr - sizeofMemoryMetaData);
 	struct MemoryMetaData *adjFreeNextTest = (struct MemoryMetaData *) (ptr - sizeofMemoryMetaData + ptrMetaData->sizeInBytes);
+    int adjFreeNextIsValid = (((void *) adjFreeNextTest) < init_mem_sbrk_break);
 
-	if(adjFreeNextTest->isFree) {
+    ptrMetaData->isFree = 1;
+
+	if(adjFreeNextIsValid && adjFreeNextTest->isFree) {
 		// The block just after the block pointed by ptr is free
 		// So, merge both of them and also see if the block just
 		// before 'ptr' is also free or not.
-		// TODO: handle case where adjFreeNextTest is outside limit
-		if(((void *) adjFreeNextTest) < init_mem_sbrk_break && adjFreeNextTest->prev != NULL && adjFreeNextTest->prev->isFree) {
-			// Merge 3 blocks: prev, curr, next
-			adjFreeNextTest->prev->sizeInBytes += ptrMetaData->sizeInBytes + adjFreeNextTest->sizeInBytes;
-			adjFreeNextTest->prev->next = adjFreeNextTest->next;
-		} else {
-			// Merge 2 blocks:       curr, next
-			ptrMetaData->sizeInBytes += adjFreeNextTest->sizeInBytes;
-			ptrMetaData->next = adjFreeNextTest->next;
-			ptrMetaData->prev = adjFreeNextTest->prev;
-			ptrMetaData->isFree = 1;
-			if(ptrMetaData->prev == NULL) {
-				// if: adjFreeNextTest was the first node in the free list
-				// then: update pointer to the first node of the free list
-				freeList.next = ptrMetaData;
-			}
-		}
+		// TODO: DONE: handle case where adjFreeNextTest is outside limit
+		// TODO: check the correctness of this implementation
+
+		// - The second test "adjFreeNextTest->prev->isFree" tell us whether the node IS the "freeList" or NOT ?
+		// - The third test verifies if the node to the left of "adjFreeNextTest" in the freeList is actually
+		//   adjacent to the block at "ptrMetaData" or NOT
+        if(adjFreeNextTest->prev != NULL
+                && adjFreeNextTest->prev->isFree
+                && ((void *)(adjFreeNextTest->prev)) + adjFreeNextTest->prev->sizeInBytes == ((void *) ptrMetaData)) {
+            // Merge 3 blocks: prev, curr, next
+            adjFreeNextTest->prev->sizeInBytes += ptrMetaData->sizeInBytes + adjFreeNextTest->sizeInBytes;
+            adjFreeNextTest->prev->next = adjFreeNextTest->next;
+            if(adjFreeNextTest->next != NULL)
+                adjFreeNextTest->next->prev = adjFreeNextTest->prev;
+        } else {
+            // Merge 2 blocks:       curr, next
+            ptrMetaData->sizeInBytes += adjFreeNextTest->sizeInBytes;
+            ptrMetaData->next = adjFreeNextTest->next;
+            ptrMetaData->prev = adjFreeNextTest->prev;
+            ptrMetaData->prev->next = ptrMetaData;  // this is very important
+            if(adjFreeNextTest->next != NULL)
+                adjFreeNextTest->next->prev = ptrMetaData;
+        }
 	} else {
 		// search through the free list and insert it
 		struct MemoryMetaData *iter = freeList.next;
-		if(ptrMetaData < iter) {
-			// ptrMetaData is to be inserted at the start of the free list
-			ptrMetaData->isFree = 1;
-			ptrMetaData->next = freeList.next;
-			freeList.next = ptrMetaData;
-		} else if (iter == NULL) {
-		    freeList.next = ptrMetaData;
-		} else if (((void *)iter) + iter->sizeInBytes == ((void *)ptrMetaData)) {
+        if (freeList.next == NULL) {
+            // freeList is empty
+            freeList.next = ptrMetaData;
+            ptrMetaData->prev = &freeList;
+            ptrMetaData->next = NULL;
+        }else if(ptrMetaData < iter) {
+            // ptrMetaData is to be inserted at the start of the free list
+            ptrMetaData->prev = &freeList;
+            ptrMetaData->next = freeList.next;
+            freeList.next = ptrMetaData;
+            ptrMetaData->next->prev = ptrMetaData;
+        } else if (((void *)iter) + iter->sizeInBytes == ((void *)ptrMetaData)) {
 			// Handle case where the block adjacent to the left is also free
 			// ptrMetaData is to be combined with the first element of the free list
 			// i.e. Merge 2 blocks: prev, curr
@@ -244,7 +257,6 @@ void mm_free(void *ptr)
 				ptrMetaData->prev = iter;
 				ptrMetaData->next = iter->next;
 				iter->next = ptrMetaData;
-				ptrMetaData->isFree = 1;
 			}
 		}
 	}
@@ -254,9 +266,7 @@ void mm_free(void *ptr)
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
 
-inline u_int32_t min(u_int32_t num1, u_int32_t num2) {
-    return (num1 < num2) ? num1 : num2;
-}
+#define min(num1, num2) ((num1 < num2) ? num1 : num2)
 
 void *mm_realloc(void *ptr, size_t size) {
 	// memory was NOT previously allocated - just mm_malloc(...)
@@ -279,21 +289,21 @@ void *mm_realloc(void *ptr, size_t size) {
 	newPtr = mm_malloc(size);
 
 	/*
-	 * This function should also copy the content of the previous memory block into the new block.
-	 * You can use 'memcpy()' for this purpose.
-	 * 
-	 * The data structures corresponding to free memory blocks and allocated memory 
+	 * This function should also copy the content of the previous memory block into
+	 * the new block. You can use 'memcpy()' for this purpose.
+	 *
+	 * The data structures corresponding to free memory blocks and allocated memory
 	 * blocks should also be updated.
-	*/
+	 */
 
 	u_int32_t oldAllocationSize = ((struct MemoryMetaData *) (ptr - sizeofMemoryMetaData))->sizeInBytes - sizeofMemoryMetaData;
 	memcpy(newPtr, ptr, min(oldAllocationSize, size));
+    mm_free(ptr);
 
-	mm_free(ptr);
 	return newPtr;
 }
 
-
+#undef min
 
 
 
