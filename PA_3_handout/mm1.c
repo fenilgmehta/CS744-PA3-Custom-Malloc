@@ -174,9 +174,24 @@ void *mm_malloc(size_t size) {
                 iterBestFit->next->prev = iterBestFit->prev;
         } else {
             // TODO: test the performance if space is given from the start of the free block
-            // Give space from the end of the block
-            iterBestFit->sizeInBytes -= sizeRequired;
-            result = ((void *) iterBestFit) + iterBestFit->sizeInBytes;
+
+            // // Give space from the end of the block
+            // iterBestFit->sizeInBytes -= sizeRequired;
+            // result = ((void *) iterBestFit) + iterBestFit->sizeInBytes;
+
+            // Give space from the start of the block
+            result = ((void *) iterBestFit);
+
+            iter = (struct MemoryMetaData *) (result + sizeRequired);
+            iter->sizeInBytes = iterBestFit->sizeInBytes - sizeRequired;
+            iter->isFree = 1;
+            iter->prev = iterBestFit->prev;
+            iter->prev->next = iter;
+            iter->next = iterBestFit->next;
+            if(iter->next != NULL)
+                iter->next->prev = iter;
+
+            iterBestFit->sizeInBytes = sizeRequired;
         }
     }
 
