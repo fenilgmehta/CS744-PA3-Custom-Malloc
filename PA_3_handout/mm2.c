@@ -93,11 +93,57 @@ int mm_init(void) {
 /* A pointer to the free block is passed so that appropriate pointer adjustments
  * can be performed and serve the malloc request by returning a pointer
  */
-void *mm_malloc_free_block(struct MemoryMetaData *iterBestFit, size_t sizeRequired) {
+struct MemoryMetaData mm_malloc_free_block_test(const struct MemoryMetaData *const iterBestFit, size_t sizeRequired) {
+    struct MemoryMetaData testResult;
+    // testResult.isFree = 0;  // UNUSED
+    testResult.sizeInBytes = 0;  // if this is non-zero, then can allocate memory from this free block
+    testResult.next = NULL;
+    // testResult.prev = NULL;  // UNUSED
+
+    // return NULL if a small iterBestFit free block is passed
+    if (iterBestFit == NULL || iterBestFit->sizeInBytes < sizeRequired) return testResult;
+
+    // The iterBestFit is capable enough to serve the malloc request.
+
+    if ((iterBestFit->sizeInBytes - sizeRequired) <= sizeofMemoryMetaData + ALIGNMENT) {
+        // This is necessary because if this is not used, then while freeing
+        // the allocated memory, less space would be freed because the space
+        // freed depends on the value stored in the allocated memory blocks
+        // MemoryMetaData->sizeInBytes variable
+        testResult.sizeInBytes = iterBestFit->sizeInBytes;
+
+        // The size of the free block which remains after allocating
+        // the requested size is too small, then give away the full
+        // free block space to this request
+        testResult.next = (struct MemoryMetaData *) iterBestFit;
+    } else {
+        // TODO: test the performance if space is given from the start of the free block
+        testResult.sizeInBytes = sizeRequired;
+
+        // TAG: MODIFY 1 - modify all code snippets with tag "MODIFY 1" together
+        // TAG: MODIFY 2
+
+        // // Give space from the end of the block
+        // // The memcpy command will be replaced by reverse for loop --- IMPORTANT 1
+        // testResult.next = (struct MemoryMetaData *) (((void *) iterBestFit) + iterBestFit->sizeInBytes - sizeRequired);
+
+        // Give space from the start of the block
+        testResult.next = (struct MemoryMetaData *) iterBestFit;
+    }
+
+    return testResult;
+}
+
+/* A pointer to the free block is passed so that appropriate pointer adjustments
+ * can be performed and serve the malloc request by returning a pointer
+ */
+void *mm_malloc_free_block(const struct MemoryMetaData *iterBestFit, size_t sizeRequired) {
     // return NULL if a small iterBestFit free block is passed
     if (iterBestFit != NULL && iterBestFit->sizeInBytes < sizeRequired) return NULL;
 
     void *result = NULL;
+    struct MemoryMetaData *iter = NULL;
+
     if (iterBestFit == NULL) {
         // All free blocks are smaller than the
         // required size, so we use mem_sbrk()
@@ -105,14 +151,15 @@ void *mm_malloc_free_block(struct MemoryMetaData *iterBestFit, size_t sizeRequir
         // mem_sbrk() is a wrapper function for the sbrk() system call.
         // Please use mem_sbrk() instead of sbrk() otherwise the evaluation
         // results may give wrong results
-
         result = mem_sbrk(sizeRequired);
-        // TODO: check use of this
-        init_mem_sbrk_break = result + sizeRequired;
-        if (((intptr_t) result) == (-1)) {
+
+        // if (((intptr_t) result) == (-1)) {
+        if (result == ((void *)-1)) {
             fprintf(stderr, "ERROR: mm_malloc ---> mem_sbrk(...) failled\n");
             fflush(stderr);
         }
+
+        init_mem_sbrk_break = result + sizeRequired;
     } else {
         // The best fit free block has been found. So,
         // we will use it to serve the malloc request.
@@ -135,9 +182,25 @@ void *mm_malloc_free_block(struct MemoryMetaData *iterBestFit, size_t sizeRequir
                 iterBestFit->next->prev = iterBestFit->prev;
         } else {
             // TODO: test the performance if space is given from the start of the free block
-            // Give space from the end of the block
-            iterBestFit->sizeInBytes -= sizeRequired;
-            result = ((void *) iterBestFit) + iterBestFit->sizeInBytes;
+
+            // TAG: MODIFY 1 - modify all code snippets with tag "MODIFY 1" together
+
+            // // Give space from the end of the block
+            // // The memcpy command will be replaced by reverse for loop --- IMPORTANT 1
+            // iterBestFit->sizeInBytes -= sizeRequired;
+            // result = ((void *) iterBestFit) + iterBestFit->sizeInBytes;
+
+            // Give space from the start of the block
+            result = ((void *) iterBestFit);
+
+            iter = (struct MemoryMetaData *) (result + sizeRequired);
+            iter->sizeInBytes = iterBestFit->sizeInBytes - sizeRequired;
+            iter->isFree = 1;
+            iter->prev = iterBestFit->prev;
+            iter->next = iterBestFit->next;
+            iter->prev->next = iter;
+            if (iter->next != NULL)
+                iter->next->prev = iter;
         }
     }
 
@@ -145,7 +208,7 @@ void *mm_malloc_free_block(struct MemoryMetaData *iterBestFit, size_t sizeRequir
     resultPtr->prev = NULL;
     resultPtr->next = NULL;
     resultPtr->isFree = 0;
-    resultPtr->sizeInBytes = sizeRequired;
+    resultPtr->sizeInBytes = sizeRequired;  // size of header + size of request
 
     return (result + sizeofMemoryMetaData);
 }
@@ -252,8 +315,9 @@ void mm_free(void *ptr) {
             //                                we are able to coalesce the three blocks (prev, curr, next)
 
             // NOTE: mm_realloc: The following modifications are useful to optimise the performance of "mm_realloc"
-            ptrMetaData->prev = adjFreePrev;
             ptrMetaData->isFree = 0;
+            ptrMetaData->prev = adjFreePrev;
+            ptrMetaData->sizeInBytes += adjFreeNextTest->sizeInBytes;
         } else {
             // Merge 2 blocks:       curr, next
 
@@ -290,8 +354,8 @@ void mm_free(void *ptr) {
             iter->sizeInBytes += ptrMetaData->sizeInBytes;
 
             // NOTE: mm_realloc: The following modifications are useful to optimise the performance of "mm_realloc"
-            ptrMetaData->prev = iter;
             ptrMetaData->isFree = 0;
+            ptrMetaData->prev = iter;
         } else {
             while (iter->next != NULL && iter->next < ptrMetaData) {
                 iter = iter->next;
@@ -305,8 +369,8 @@ void mm_free(void *ptr) {
                 iter->sizeInBytes += ptrMetaData->sizeInBytes;
 
                 // NOTE: mm_realloc: The following modifications are useful to optimise the performance of "mm_realloc"
-                ptrMetaData->prev = iter;
                 ptrMetaData->isFree = 0;
+                ptrMetaData->prev = iter;
             } else {
                 // insert ptrMetaData in between the free list
                 ptrMetaData->prev = iter;
@@ -341,27 +405,52 @@ void *mm_realloc(void *ptr, size_t size) {
         return NULL;
     }
 
+    // void *newPtr = NULL;
+    // newPtr = mm_malloc(size);
+    //
+    // u_int32_t oldAllocationSize = ((struct MemoryMetaData *) (ptr - sizeofMemoryMetaData))->sizeInBytes - sizeofMemoryMetaData;
+    // memcpy(newPtr, ptr, min(oldAllocationSize, ALIGN(size)));
+    // mm_free(ptr);
+    //
+    // return newPtr;
+
     // TODO: IN-PROGRESS: can optimise this if the pointers of the freed blocks are set properly
     struct MemoryMetaData *ptrMetaData = (struct MemoryMetaData *) (ptr - sizeofMemoryMetaData);
-    u_int32_t sizeAligned = ALIGN(size);
-    u_int32_t oldAllocationSize = ptrMetaData->sizeInBytes - sizeofMemoryMetaData;
-
+    const u_int32_t sizeAligned = ALIGN(size);
+    const u_int32_t sizeRequired = sizeAligned + sizeofMemoryMetaData;
+    const u_int32_t oldAllocationSize = ptrMetaData->sizeInBytes - sizeofMemoryMetaData;
     mm_free(ptr);
 
     void *newPtr = NULL;
+    struct MemoryMetaData newPtrResult;
 
-    if (ptrMetaData->isFree == 0) {
-        // Implies the block got merged with the previous block, and may be with the next free block as well
-        newPtr = mm_malloc_free_block(ptrMetaData->prev, sizeAligned + sizeofMemoryMetaData);
+    // if condition is true  : Implies the block got merged with the previous block, and may be with the next free block as well
+    // if condition is false : The block may have got merged with the next block or may not have been merged
+    struct MemoryMetaData *freeBlockPointer = (ptrMetaData->isFree == 0) ? (ptrMetaData->prev) : (ptrMetaData);
+    newPtrResult = mm_malloc_free_block_test(freeBlockPointer, sizeRequired);
+
+    if (newPtrResult.sizeInBytes != 0) {
+        newPtr = ((void *) newPtrResult.next) + sizeofMemoryMetaData;
+
+        newPtrResult = *ptrMetaData;
+        newPtrResult.next = ptrMetaData;
+
+        if (ptr != newPtr) {
+            // TAG: MODIFY 2
+            memcpy(newPtr, ptr, min(oldAllocationSize, sizeAligned));
+        }
+
+        mm_malloc_free_block(
+                freeBlockPointer,
+                sizeRequired
+        );
     } else {
-        // The block may have got merged with the next block or may not have been merged
-        newPtr = mm_malloc_free_block(ptrMetaData, sizeAligned + sizeofMemoryMetaData);
-    }
-
-    if (newPtr == NULL) {
         // Even coalescing was not capable enough to make the block having "ptr" large
         // enough to serve the new request. So, fallback to normal "mm_malloc" call
         newPtr = mm_malloc(size);
+        
+        // TAG: MODIFY 2
+        memcpy(newPtr, ptr, min(oldAllocationSize, sizeAligned));
     }
 
     /*
@@ -371,8 +460,6 @@ void *mm_realloc(void *ptr, size_t size) {
      * The data structures corresponding to free memory blocks and allocated memory
      * blocks should also be updated.
      */
-    if (ptr != newPtr)
-        memcpy(newPtr, ptr, min(oldAllocationSize, sizeAligned));
 
     return newPtr;
 }

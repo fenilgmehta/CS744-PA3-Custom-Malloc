@@ -331,10 +331,6 @@ void *mm_realloc(void *ptr, size_t size) {
         return NULL;
     }
 
-    // TODO: check the use
-    // size = ((size+7)/8)*8; // 8-byte alignment
-    // size = ALIGN(size);
-
     // TODO: can optimise this if the pointers of the freed blocks are set properly
     void *newPtr = NULL;
     newPtr = mm_malloc(size);
