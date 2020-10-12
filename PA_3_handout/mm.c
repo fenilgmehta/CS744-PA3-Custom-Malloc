@@ -32,7 +32,7 @@ team_t team = {
     /* Second member's full name (leave blank if none) */
     "Vipin Mahawar",
     /* Second member's email address (leave blank if none) */
-    "member_2@cse.iitb.ac.in"
+    "vipin@cse.iitb.ac.in"
 };
 
 /* single word (4) or double word (8) alignment */
