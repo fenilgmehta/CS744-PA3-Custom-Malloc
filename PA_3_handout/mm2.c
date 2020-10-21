@@ -48,6 +48,233 @@ team_t team = {
 // ------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------
 
+// NOTE: the "s_" in front of all functions and variables denotes that it is used
+//       for small memory operations
+// NOTE: 1 ---> the location with pointer =((void*)base_pointer + (8 * idx)) is free
+
+struct s_SmallDataMetaData {
+    u_int64_t oneBit, twoBit, threeBit, fourBit;
+    struct s_SmallDataMetaData *prev, *next;
+};
+
+struct s_FreePointer {
+    int idx;
+    void *ptr;
+    struct s_SmallDataMetaData *memoryBlock;
+};
+
+// In decimal = 1, 3, 7, 15
+const u_int64_t s_ONE_BIT = 0b1, s_TWO_BIT = 0b11, s_THREE_BIT = 0b111, s_FOUR_BIT = 0b1111;
+const u_int64_t s_MAX_VAL_FREE = 0b1111111111111111111111111111111111111111111111111111111111111111;
+
+void s_SmallDataMetaData_init(struct s_SmallDataMetaData *ptr) {
+    ptr->prev = ptr->next = NULL;
+    ptr->oneBit = ptr->twoBit = ptr->threeBit = ptr->fourBit = s_MAX_VAL_FREE;
+}
+
+// The left most bit is index 0, the right most bit is index 63
+inline u_int64_t s_bit_get_nth_1(const u_int64_t num, const int bitIdx) {
+    return (num >> (63 - bitIdx)) & s_ONE_BIT;
+}
+
+inline u_int64_t s_bit_get_nth_2(const u_int64_t num, const int bitIdx) {
+    return (num >> (63 - bitIdx - 1)) & s_TWO_BIT;
+}
+
+inline u_int64_t s_bit_get_nth_3(const u_int64_t num, const int bitIdx) {
+    return (num >> (63 - bitIdx - 2)) & s_THREE_BIT;
+}
+
+inline u_int64_t s_bit_get_nth_4(const u_int64_t num, const int bitIdx) {
+    return (num >> (63 - bitIdx - 3)) & s_FOUR_BIT;
+}
+
+// max bitIdx can be 63
+inline u_int64_t s_bit_set_nth_1(u_int64_t num, const int bitIdx) {
+    return num | (s_ONE_BIT << (63 - bitIdx));
+}
+
+// max bitIdx can be 62
+inline u_int64_t s_bit_set_nth_2(u_int64_t num, const int bitIdx) {
+    return num | (s_ONE_BIT << (63 - bitIdx - 1));
+}
+
+// max bitIdx can be 61
+inline u_int64_t s_bit_set_nth_3(u_int64_t num, const int bitIdx) {
+    return num | (s_ONE_BIT << (63 - bitIdx - 2));
+}
+
+// max bitIdx can be 60
+inline u_int64_t s_bit_set_nth_4(u_int64_t num, const int bitIdx) {
+    return num | (s_ONE_BIT << (63 - bitIdx - 3));
+}
+
+const size_t s_sizeofSmallDataMetaData = ALIGN(sizeof(struct s_SmallDataMetaData));
+
+struct s_SmallDataMetaData s_freeList;
+
+void s_mm_init() {
+    s_SmallDataMetaData_init(&s_freeList);
+    // s_freeList.prev = NULL;  // UNUSED
+}
+
+inline struct s_SmallDataMetaData * s_get_BLOCK() {
+    return (struct s_SmallDataMetaData *) mm_malloc(s_sizeofSmallDataMetaData + 64 * 8);
+}
+
+inline void *s_get_base_ptr(struct s_SmallDataMetaData *smallBlockPtr) {
+    return ((void *) smallBlockPtr) + s_sizeofSmallDataMetaData;
+}
+
+inline void *s_get_end_ptr(struct s_SmallDataMetaData *smallBlockPtr) {
+    return s_get_base_ptr(smallBlockPtr) + (8 * 64);
+}
+
+inline void *s_get_idx_ptr(struct s_SmallDataMetaData *smallBlockPtr, int idx) {
+    return s_get_base_ptr(smallBlockPtr) + (8 * idx);
+}
+
+struct s_FreePointer s_mm_malloc_check_availability(struct s_SmallDataMetaData *smallBlockPtr, int bits) {
+    int i = 0, i_end = 64 - bits, bitsVal;
+    struct s_FreePointer result;
+    result.idx = -1;
+
+    switch (bits) {
+        case 1:
+            while (i < i_end) {
+                if (s_bit_get_nth_1(smallBlockPtr->oneBit, i)) {
+                    result.idx = i;
+                    break;
+                }
+                i += 1;
+            }
+            break;
+        case 2:
+            while (i < i_end) {
+                bitsVal = s_bit_get_nth_2(smallBlockPtr->oneBit, i);
+                if (bitsVal == s_TWO_BIT) {
+                    result.idx = i;
+                    break;
+                }
+                i += (bitsVal == s_ONE_BIT) ? 1 : 2;
+                // x ---> can take any value 0/1
+                // increment by 1 if the value of bitsVal = 0b01
+                // increment by 2 if the value of bitsVal = 0bx0
+            }
+            break;
+        case 3:
+            while (i < i_end) {
+                bitsVal = s_bit_get_nth_3(smallBlockPtr->oneBit, i);
+                if (bitsVal == s_THREE_BIT) {
+                    result.idx = i;
+                    break;
+                }
+                if ((bitsVal & s_TWO_BIT) == s_TWO_BIT) i += 1;
+                else if ((bitsVal & s_ONE_BIT) == s_ONE_BIT) i += 2;
+                else i += 3;
+                // x ---> can take any value 0/1
+                // increment by 1 if the value of bitsVal = 0b011
+                // increment by 2 if the value of bitsVal = 0bx01
+                // increment by 3 if the value of bitsVal = 0bxx0
+            }
+            break;
+        case 4:
+            while (i < i_end) {
+                bitsVal = s_bit_get_nth_4(smallBlockPtr->oneBit, i);
+                if (bitsVal == s_FOUR_BIT) {
+                    result.idx = i;
+                    break;
+                }
+                if ((bitsVal & s_THREE_BIT) == s_THREE_BIT) i += 1;
+                else if ((bitsVal & s_TWO_BIT) == s_TWO_BIT) i += 2;
+                else if ((bitsVal & s_ONE_BIT) == s_ONE_BIT) i += 3;
+                else i += 4;
+                // x ---> can take any value 0/1
+                // increment by 1 if the value of bitsVal = 0b0111
+                // increment by 2 if the value of bitsVal = 0bx011
+                // increment by 3 if the value of bitsVal = 0bxx01
+                // increment by 4 if the value of bitsVal = 0bxxx0
+            }
+            break;
+        default:
+            fprintf(stderr, "ERROR: wrong value of bits = %d", bits);
+    }
+
+    if (result.idx != -1)
+        result.ptr = s_get_idx_ptr(smallBlockPtr, result.idx);
+
+    return result;
+}
+
+struct s_FreePointer s_mm_malloc_capable_free_block(int bits) {
+    struct s_FreePointer result;
+    struct s_SmallDataMetaData *ptr = &s_freeList;
+    while (ptr->next != NULL) {
+        result = s_mm_malloc_check_availability(ptr->next, bits);
+        if (result.idx != -1) {
+            result.memoryBlock = ptr->next;
+            return result;
+        }
+        ptr = ptr->next;
+    }
+
+    // NO block found till now which is capable enough to serve the request.
+    // So, we append a new node to the end of "s_freeList" as "ptr" points to the
+    // last node of the list
+    ptr->next = s_get_BLOCK();
+
+    result.memoryBlock = ptr->next;
+    s_SmallDataMetaData_init(result.memoryBlock);
+    result.memoryBlock->prev = ptr;
+    result.idx = 0;
+    result.ptr = s_get_base_ptr(result.memoryBlock);
+
+    return result;
+}
+
+void *s_mm_malloc(size_t sizeAligned) {
+    int bits = sizeAligned / 8;
+    struct s_FreePointer capable_block_info = s_mm_malloc_capable_free_block(bits);
+
+    // Update appropriate bits for the correct block whose info is stored in "capable_block_info"
+    switch (bits) {
+        case 1:
+            capable_block_info.memoryBlock->oneBit = s_bit_set_nth_1(capable_block_info.memoryBlock->oneBit, capable_block_info.idx);
+            break;
+        case 2:
+            capable_block_info.memoryBlock->oneBit = s_bit_set_nth_2(capable_block_info.memoryBlock->oneBit, capable_block_info.idx);
+            capable_block_info.memoryBlock->twoBit = s_bit_set_nth_2(capable_block_info.memoryBlock->twoBit, capable_block_info.idx);
+            break;
+        case 3:
+            capable_block_info.memoryBlock->oneBit = s_bit_set_nth_3(capable_block_info.memoryBlock->oneBit, capable_block_info.idx);
+            capable_block_info.memoryBlock->threeBit = s_bit_set_nth_3(capable_block_info.memoryBlock->threeBit, capable_block_info.idx);
+            break;
+        case 4:
+            capable_block_info.memoryBlock->oneBit = s_bit_set_nth_4(capable_block_info.memoryBlock->oneBit, capable_block_info.idx);
+            capable_block_info.memoryBlock->fourBit = s_bit_set_nth_4(capable_block_info.memoryBlock->fourBit, capable_block_info.idx);
+            break;
+        default:
+            fprintf(stderr, "ERROR: wrong value of bits = %d", bits);
+    }
+    return capable_block_info.ptr;
+}
+
+struct s_FreePointer s_is_small_size_memory_ptr(void *ptr) {
+
+}
+
+int s_mm_free(void *ptr) {
+    struct s_FreePointer result = s_is_small_size_memory_ptr(ptr);
+    if (result.idx != -1) {
+        // TODO
+        return 1;
+    }
+    return 0;
+}
+
+// ------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
 
 /*
  * mm_init - initialize the malloc package.
@@ -63,9 +290,9 @@ struct MemoryMetaData {
 };
 
 // static size_t sizeofMemoryMetaData = ((sizeof(struct MemoryMetaData) + ALIGNMENT - 1) / ALIGNMENT) * ALIGNMENT;
-static size_t sizeofMemoryMetaData = ALIGN(sizeof(struct MemoryMetaData));
+const size_t sizeofMemoryMetaData = ALIGN(sizeof(struct MemoryMetaData));
 
-static struct MemoryMetaData freeList;
+struct MemoryMetaData freeList;
 
 int mm_init(void) {
     /*
@@ -81,7 +308,7 @@ int mm_init(void) {
     mem_reset_brk();
     init_mem_sbrk_break = NULL;
     freeList.prev = NULL;  // UNUSED
-    freeList.next = NULL; // (struct MemoryMetaData *) mem_sbrk(1024);
+    freeList.next = NULL;  // (struct MemoryMetaData *) mem_sbrk(1024);
     freeList.isFree = 0;  // UNUSED
     freeList.sizeInBytes = 0;  // UNUSED
 
@@ -154,7 +381,7 @@ void *mm_malloc_free_block(const struct MemoryMetaData *iterBestFit, size_t size
         result = mem_sbrk(sizeRequired);
 
         // if (((intptr_t) result) == (-1)) {
-        if (result == ((void *)-1)) {
+        if (result == ((void *) -1)) {
             fprintf(stderr, "ERROR: mm_malloc ---> mem_sbrk(...) failled\n");
             fflush(stderr);
         }
@@ -246,18 +473,10 @@ void *mm_malloc(size_t size) {
     //                after iterating the whole free list, it
     //                will point to the best fit free block
     struct MemoryMetaData *iter = freeList.next, *iterBestFit = NULL;
-    while (iter != NULL) {
-        if (iterBestFit == NULL) {
-            if (iter->sizeInBytes >= sizeRequired) {
-                iterBestFit = iter;
-            }
-        } else {
-            if (iter->sizeInBytes >= sizeRequired && iter->sizeInBytes < iterBestFit->sizeInBytes) {
-                iterBestFit = iter;
-            }
-        }
+    while (iter != NULL && iter->sizeInBytes < sizeRequired) {
         iter = iter->next;
     }
+    iterBestFit = iter;
 
     return mm_malloc_free_block(iterBestFit, sizeRequired);
 }
@@ -448,7 +667,7 @@ void *mm_realloc(void *ptr, size_t size) {
         // Even coalescing was not capable enough to make the block having "ptr" large
         // enough to serve the new request. So, fallback to normal "mm_malloc" call
         newPtr = mm_malloc(size);
-        
+
         // TAG: MODIFY 2
         memcpy(newPtr, ptr, min(oldAllocationSize, sizeAligned));
     }
