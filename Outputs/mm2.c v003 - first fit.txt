@@ -1,0 +1,125 @@
+mm2.c - first fit instead of best fit
+
+(dev) ➜  PA_3_handout git:(master) ✗ make
+make: 'mdriver' is up to date.
+(dev) ➜  PA_3_handout git:(master) ✗ OIFS="${IFS}"
+(dev) ➜  PA_3_handout git:(master) ✗ IFS=" "
+(dev) ➜  PA_3_handout git:(master) ✗ for i in $(echo "short1-bal.rep short2-bal.rep short3-bal.rep binary-bal.rep cp-decl-bal.rep random-bal.rep realloc-bal.rep");
+for> do
+for> echo "----------------- Working on ${i} -----------------"
+for> ./mdriver2 -V -f "traces/${i}" 2>&1
+for> done
+----------------- Working on short1-bal.rep -----------------
+Team Name:team name
+Member 1 :Fenil Mehta:fenilgmehta@cse.iitb.ac.in
+Member 2 :Vipin Mahawar:vipin@cse.iitb.ac.in
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: traces/short1-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs      Kops
+ 0       yes   66%      12  0.000000     30000
+Total          66%      12  0.000000     30000
+
+Perf index = 40 (util) + 40 (thru) = 80/100
+----------------- Working on short2-bal.rep -----------------
+Team Name:team name
+Member 1 :Fenil Mehta:fenilgmehta@cse.iitb.ac.in
+Member 2 :Vipin Mahawar:vipin@cse.iitb.ac.in
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: traces/short2-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs      Kops
+ 0       yes   99%      12  0.000000     40000
+Total          99%      12  0.000000     40000
+
+Perf index = 60 (util) + 40 (thru) = 100/100
+----------------- Working on short3-bal.rep -----------------
+Team Name:team name
+Member 1 :Fenil Mehta:fenilgmehta@cse.iitb.ac.in
+Member 2 :Vipin Mahawar:vipin@cse.iitb.ac.in
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: traces/short3-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs      Kops
+ 0       yes   50%      10  0.000000     25000
+Total          50%      10  0.000000     25000
+
+Perf index = 30 (util) + 40 (thru) = 70/100
+----------------- Working on binary-bal.rep -----------------
+Team Name:team name
+Member 1 :Fenil Mehta:fenilgmehta@cse.iitb.ac.in
+Member 2 :Vipin Mahawar:vipin@cse.iitb.ac.in
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: traces/binary-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs      Kops
+ 0       yes   54%   12000  0.079024       152
+Total          54%   12000  0.079024       152
+
+Perf index = 32 (util) + 10 (thru) = 42/100
+----------------- Working on cp-decl-bal.rep -----------------
+Team Name:team name
+Member 1 :Fenil Mehta:fenilgmehta@cse.iitb.ac.in
+Member 2 :Vipin Mahawar:vipin@cse.iitb.ac.in
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: traces/cp-decl-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs      Kops
+ 0       yes   99%    6648  0.000307     21627
+Total          99%    6648  0.000307     21627
+
+Perf index = 59 (util) + 40 (thru) = 99/100
+----------------- Working on random-bal.rep -----------------
+Team Name:team name
+Member 1 :Fenil Mehta:fenilgmehta@cse.iitb.ac.in
+Member 2 :Vipin Mahawar:vipin@cse.iitb.ac.in
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: traces/random-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs      Kops
+ 0       yes   92%    4800  0.003542      1355
+Total          92%    4800  0.003542      1355
+
+Perf index = 55 (util) + 40 (thru) = 95/100
+----------------- Working on realloc-bal.rep -----------------
+Team Name:team name
+Member 1 :Fenil Mehta:fenilgmehta@cse.iitb.ac.in
+Member 2 :Vipin Mahawar:vipin@cse.iitb.ac.in
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: traces/realloc-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs      Kops
+ 0       yes   43%   14401  0.055033       262
+Total          43%   14401  0.055033       262
+
+Perf index = 26 (util) + 17 (thru) = 43/100
+(dev) ➜  PA_3_handout git:(master) ✗ IFS="${OIFS}"
+(dev) ➜  PA_3_handout git:(master) ✗ 
