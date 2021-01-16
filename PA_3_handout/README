@@ -7,6 +7,7 @@
 #
 ######################################################################
 
+
 ***********
 Main Files:
 ***********
@@ -20,6 +21,7 @@ short{1,2}-bal.rep
 Makefile	
 	Builds the driver
 
+
 **********************************
 Other support files for the driver
 **********************************
@@ -31,9 +33,11 @@ fcyc.{c,h}	Timer functions based on cycle counters
 ftimer.{c,h}	Timer functions based on interval timers and gettimeofday()
 memlib.{c,h}	Models the heap and sbrk function
 
+
 *******************************
 Building and running the driver
 *******************************
+
 To build the driver, type "make" to the shell.
 
 To run the driver on a tiny test trace: (for the naive implementation)
